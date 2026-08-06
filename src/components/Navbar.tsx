@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { PhoneCall, Users, CalendarCheck, Megaphone, Settings, BarChart2, Cpu, Sparkles, LogOut, User as UserIcon } from 'lucide-react';
+import { PhoneCall, Users, CalendarCheck, Megaphone, Settings, BarChart2, Cpu, Sparkles, LogOut, User as UserIcon, Smartphone } from 'lucide-react';
 import { signInWithPopup, signOut, onAuthStateChanged, User } from 'firebase/auth';
 import { auth, googleAuthProvider } from '../lib/firebase';
 
@@ -8,13 +8,17 @@ interface NavbarProps {
   setActiveTab: (tab: string) => void;
   isCallActive: boolean;
   onQuickCall: () => void;
+  onOpenMobileModal?: () => void;
+  isMobilePreviewActive?: boolean;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
   activeTab,
   setActiveTab,
   isCallActive,
-  onQuickCall
+  onQuickCall,
+  onOpenMobileModal,
+  isMobilePreviewActive
 }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
@@ -157,6 +161,18 @@ export const Navbar: React.FC<NavbarProps> = ({
                   />
                 </svg>
                 <span>Google Login</span>
+              </button>
+            )}
+
+            {/* Mobile App Trigger Button */}
+            {onOpenMobileModal && (
+              <button
+                onClick={onOpenMobileModal}
+                className="flex items-center space-x-1.5 px-3 py-1.5 rounded-full bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 text-xs font-semibold transition-all shadow-sm"
+                title="Get SIYA Mobile App or test Mobile View"
+              >
+                <Smartphone className="w-3.5 h-3.5 text-indigo-400" />
+                <span className="hidden md:inline">Mobile App</span>
               </button>
             )}
 

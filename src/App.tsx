@@ -7,9 +7,11 @@ import { CampaignsPanel } from './components/CampaignsPanel';
 import { PromptEditor } from './components/PromptEditor';
 import { AnalyticsDashboard } from './components/AnalyticsDashboard';
 import { TechStackGuide } from './components/TechStackGuide';
+import { MobileAppModal } from './components/MobileAppModal';
+import { MobileAppFrame } from './components/MobileAppFrame';
 import { onAuthStateChanged, signInWithPopup, User } from 'firebase/auth';
 import { auth, googleAuthProvider } from './lib/firebase';
-import { Sparkles, ShieldCheck, Lock, PhoneCall, Users, CalendarCheck, Cpu, ArrowRight, Loader2 } from 'lucide-react';
+import { Sparkles, ShieldCheck, Lock, PhoneCall, Users, CalendarCheck, Cpu, ArrowRight, Loader2, Smartphone } from 'lucide-react';
 
 import {
   INITIAL_LEADS,
@@ -33,6 +35,8 @@ export default function App() {
   const [demoBookings, setDemoBookings] = useState<DemoBooking[]>(INITIAL_DEMO_BOOKINGS);
   const [campaigns, setCampaigns] = useState<Campaign[]>(INITIAL_CAMPAIGNS);
   const [isCallActive, setIsCallActive] = useState(false);
+  const [isMobileModalOpen, setIsMobileModalOpen] = useState(false);
+  const [isMobilePreviewActive, setIsMobilePreviewActive] = useState(false);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -236,64 +240,94 @@ export default function App() {
     );
   }
 
+  // Render tab content component
+  const renderTabContent = () => (
+    <>
+      {activeTab === 'call' && (
+        <CallInterface
+          selectedLead={selectedLead}
+          systemConfig={systemConfig}
+          onCallEnded={handleCallEnded}
+          onDemoBooked={handleDemoBooked}
+          isCallActive={isCallActive}
+          setIsCallActive={setIsCallActive}
+        />
+      )}
+
+      {activeTab === 'leads' && (
+        <LeadsManager
+          leads={leads}
+          campaigns={campaigns}
+          onSelectLeadToCall={handleSelectLeadToCall}
+          onAddLead={handleAddLead}
+          onDeleteLeads={handleDeleteLeads}
+          onAssignCampaign={handleAssignCampaignToLeads}
+        />
+      )}
+
+      {activeTab === 'demos' && <DemoBookings bookings={demoBookings} />}
+
+      {activeTab === 'campaigns' && (
+        <CampaignsPanel
+          campaigns={campaigns}
+          leads={leads}
+          onStartCampaignCall={handleSelectLeadToCall}
+          onAddCampaign={handleAddCampaign}
+        />
+      )}
+
+      {activeTab === 'prompt' && (
+        <PromptEditor config={systemConfig} onSaveConfig={setSystemConfig} />
+      )}
+
+      {activeTab === 'analytics' && <AnalyticsDashboard demoBookings={demoBookings} />}
+
+      {activeTab === 'architecture' && <TechStackGuide />}
+    </>
+  );
+
   return (
     <div className="min-h-screen bg-[#050505] text-slate-100 font-sans selection:bg-indigo-500 selection:text-white">
-      {/* Top Navbar */}
-      <Navbar
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
-        isCallActive={isCallActive}
-        onQuickCall={() => {
-          if (leads.length > 0) {
-            setSelectedLead(leads[0]);
-          }
-          setActiveTab('call');
-        }}
+      {/* Mobile App Information Modal */}
+      <MobileAppModal
+        isOpen={isMobileModalOpen}
+        onClose={() => setIsMobileModalOpen(false)}
+        onEnableMobilePreview={() => setIsMobilePreviewActive(!isMobilePreviewActive)}
+        isMobilePreviewActive={isMobilePreviewActive}
       />
 
-      {/* Main Content Area */}
-      <main className="pb-16">
-        {activeTab === 'call' && (
-          <CallInterface
-            selectedLead={selectedLead}
-            systemConfig={systemConfig}
-            onCallEnded={handleCallEnded}
-            onDemoBooked={handleDemoBooked}
+      {isMobilePreviewActive ? (
+        <MobileAppFrame
+          activeTab={activeTab}
+          setActiveTab={setActiveTab}
+          onExitMobilePreview={() => setIsMobilePreviewActive(false)}
+          isCallActive={isCallActive}
+        >
+          {renderTabContent()}
+        </MobileAppFrame>
+      ) : (
+        <>
+          {/* Top Navbar */}
+          <Navbar
+            activeTab={activeTab}
+            setActiveTab={setActiveTab}
             isCallActive={isCallActive}
-            setIsCallActive={setIsCallActive}
+            onQuickCall={() => {
+              if (leads.length > 0) {
+                setSelectedLead(leads[0]);
+              }
+              setActiveTab('call');
+            }}
+            onOpenMobileModal={() => setIsMobileModalOpen(true)}
+            isMobilePreviewActive={isMobilePreviewActive}
           />
-        )}
 
-        {activeTab === 'leads' && (
-          <LeadsManager
-            leads={leads}
-            campaigns={campaigns}
-            onSelectLeadToCall={handleSelectLeadToCall}
-            onAddLead={handleAddLead}
-            onDeleteLeads={handleDeleteLeads}
-            onAssignCampaign={handleAssignCampaignToLeads}
-          />
-        )}
-
-        {activeTab === 'demos' && <DemoBookings bookings={demoBookings} />}
-
-        {activeTab === 'campaigns' && (
-          <CampaignsPanel
-            campaigns={campaigns}
-            leads={leads}
-            onStartCampaignCall={handleSelectLeadToCall}
-            onAddCampaign={handleAddCampaign}
-          />
-        )}
-
-        {activeTab === 'prompt' && (
-          <PromptEditor config={systemConfig} onSaveConfig={setSystemConfig} />
-        )}
-
-        {activeTab === 'analytics' && <AnalyticsDashboard demoBookings={demoBookings} />}
-
-        {activeTab === 'architecture' && <TechStackGuide />}
-      </main>
+          {/* Main Content Area */}
+          <main className="pb-16">
+            {renderTabContent()}
+          </main>
+        </>
+      )}
     </div>
   );
 }
