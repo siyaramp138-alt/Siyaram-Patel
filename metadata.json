@@ -1,0 +1,6 @@
+{
+  "name": "SIYA - AI Voice Telecaller",
+  "description": "An AI Telecaller platform powered by Gemini for Grow Business Solutions, featuring live voice calls, lead campaigns, demo bookings, and objection management.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
