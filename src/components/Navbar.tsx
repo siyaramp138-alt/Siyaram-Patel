@@ -10,6 +10,9 @@ interface NavbarProps {
   onQuickCall: () => void;
   onOpenMobileModal?: () => void;
   isMobilePreviewActive?: boolean;
+  currentUser?: User | { displayName?: string | null; email?: string | null; photoURL?: string | null } | null;
+  onSignOut?: () => void;
+  onSignIn?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -18,7 +21,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   isCallActive,
   onQuickCall,
   onOpenMobileModal,
-  isMobilePreviewActive
+  isMobilePreviewActive,
+  currentUser,
+  onSignOut,
+  onSignIn
 }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
@@ -31,7 +37,13 @@ export const Navbar: React.FC<NavbarProps> = ({
     return () => unsubscribe();
   }, []);
 
+  const displayUser = currentUser !== undefined ? currentUser : user;
+
   const handleGoogleSignIn = async () => {
+    if (onSignIn) {
+      onSignIn();
+      return;
+    }
     try {
       await signInWithPopup(auth, googleAuthProvider);
     } catch (error: any) {
@@ -47,6 +59,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   const handleSignOut = async () => {
+    if (onSignOut) {
+      onSignOut();
+    }
     try {
       await signOut(auth);
     } catch (error) {
@@ -117,17 +132,17 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* User Auth & Action Buttons */}
           <div className="flex items-center space-x-3">
             {/* Google Account Login */}
-            {isAuthLoading ? (
+            {isAuthLoading && displayUser === undefined ? (
               <div className="h-8 w-24 bg-slate-900 animate-pulse rounded-full border border-slate-800"></div>
-            ) : user ? (
+            ) : displayUser ? (
               <div className="flex items-center space-x-2 bg-slate-900/90 border border-slate-800 px-3 py-1 rounded-full text-xs">
-                {user.photoURL ? (
-                  <img src={user.photoURL} alt={user.displayName || 'User'} className="w-5 h-5 rounded-full border border-slate-700" referrerPolicy="no-referrer" />
+                {displayUser.photoURL ? (
+                  <img src={displayUser.photoURL} alt={displayUser.displayName || 'User'} className="w-5 h-5 rounded-full border border-slate-700" referrerPolicy="no-referrer" />
                 ) : (
                   <UserIcon className="w-4 h-4 text-indigo-400" />
                 )}
                 <span className="font-medium text-slate-200 max-w-[100px] sm:max-w-[140px] truncate">
-                  {user.displayName || user.email}
+                  {displayUser.displayName || displayUser.email}
                 </span>
                 <button
                   onClick={handleSignOut}
