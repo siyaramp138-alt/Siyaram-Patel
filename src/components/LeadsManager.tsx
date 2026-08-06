@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Users, PhoneCall, Plus, Search, Filter, CheckCircle2, Clock, XCircle,
   Building2, UserPlus, Flame, ArrowUpDown, Info, ChevronDown, Mail,
-  CheckSquare, Square, Trash2, Megaphone, Download, Tag, AlertTriangle, X, Layers, Globe
+  CheckSquare, Square, Trash2, Megaphone, Download, Upload, Tag, AlertTriangle, X, Layers, Globe
 } from 'lucide-react';
 import { Lead, Campaign, SupportedLanguage } from '../types';
 import { LANGUAGE_METADATA } from '../data/languagePrompts';
@@ -112,18 +112,29 @@ export const LeadsManager: React.FC<LeadsManagerProps> = ({
     setTimeout(() => setToastMessage(null), 3500);
   };
 
-  const handleExportCSV = () => {
-    const leadsToExport = leads.filter((l) => selectedLeadIds.includes(l.id));
-    if (leadsToExport.length === 0) return;
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const headers = ['Name', 'Company', 'Phone', 'Industry', 'Current Software', 'Status', 'Campaign', 'Notes'];
+  const handleExportCSV = () => {
+    // Export selected leads if any are checked, or all current leads
+    const leadsToExport = selectedLeadIds.length > 0
+      ? leads.filter((l) => selectedLeadIds.includes(l.id))
+      : sortedLeads.map(({ lead }) => lead);
+
+    if (leadsToExport.length === 0) {
+      setToastMessage("No leads available to export.");
+      setTimeout(() => setToastMessage(null), 3000);
+      return;
+    }
+
+    const headers = ['Name', 'Company', 'Phone', 'Industry', 'Current Software', 'Status', 'Language', 'Campaign', 'Notes'];
     const rows = leadsToExport.map((l) => [
-      `"${l.name.replace(/"/g, '""')}"`,
-      `"${l.company.replace(/"/g, '""')}"`,
-      `"${l.phone.replace(/"/g, '""')}"`,
-      `"${l.industry.replace(/"/g, '""')}"`,
-      `"${l.currentSoftware.replace(/"/g, '""')}"`,
-      `"${l.status}"`,
+      `"${(l.name || '').replace(/"/g, '""')}"`,
+      `"${(l.company || '').replace(/"/g, '""')}"`,
+      `"${(l.phone || '').replace(/"/g, '""')}"`,
+      `"${(l.industry || '').replace(/"/g, '""')}"`,
+      `"${(l.currentSoftware || '').replace(/"/g, '""')}"`,
+      `"${l.status || 'New'}"`,
+      `"${l.preferredLanguage || 'English'}"`,
       `"${(l.campaignTitle || '').replace(/"/g, '""')}"`,
       `"${(l.notes || '').replace(/"/g, '""')}"`
     ]);
@@ -137,6 +148,100 @@ export const LeadsManager: React.FC<LeadsManagerProps> = ({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+
+    setToastMessage(`Exported ${leadsToExport.length} lead(s) to CSV.`);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  const handleImportCSV = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const text = event.target?.result as string;
+        if (!text) return;
+
+        const lines = text.split(/\r\n|\n/).filter((line) => line.trim().length > 0);
+        if (lines.length <= 1) {
+          setToastMessage("CSV file appears to be empty or has headers only.");
+          setTimeout(() => setToastMessage(null), 3500);
+          return;
+        }
+
+        // Parse CSV lines handling quoted fields
+        const parseCSVLine = (line: string): string[] => {
+          const result: string[] = [];
+          let current = '';
+          let inQuotes = false;
+          for (let i = 0; i < line.length; i++) {
+            const char = line[i];
+            if (char === '"') {
+              if (inQuotes && line[i + 1] === '"') {
+                current += '"';
+                i++;
+              } else {
+                inQuotes = !inQuotes;
+              }
+            } else if (char === ',' && !inQuotes) {
+              result.push(current.trim());
+              current = '';
+            } else {
+              current += char;
+            }
+          }
+          result.push(current.trim());
+          return result;
+        };
+
+        const headers = parseCSVLine(lines[0]).map((h) => h.toLowerCase());
+        const nameIdx = headers.findIndex((h) => h.includes('name') || h.includes('customer'));
+        const companyIdx = headers.findIndex((h) => h.includes('company') || h.includes('org'));
+        const phoneIdx = headers.findIndex((h) => h.includes('phone') || h.includes('mobile') || h.includes('contact'));
+        const industryIdx = headers.findIndex((h) => h.includes('industry'));
+        const softwareIdx = headers.findIndex((h) => h.includes('software') || h.includes('tool'));
+        const langIdx = headers.findIndex((h) => h.includes('language') || h.includes('lang'));
+        const notesIdx = headers.findIndex((h) => h.includes('note') || h.includes('desc'));
+
+        let importedCount = 0;
+        lines.slice(1).forEach((line, index) => {
+          const values = parseCSVLine(line);
+          const name = nameIdx !== -1 && values[nameIdx] ? values[nameIdx] : (values[0] || `Lead ${index + 1}`);
+          const phone = phoneIdx !== -1 && values[phoneIdx] ? values[phoneIdx] : (values[1] || '+91 90000 00000');
+          const company = companyIdx !== -1 && values[companyIdx] ? values[companyIdx] : (values[2] || 'Independent Business');
+
+          if (name && phone) {
+            const newLead: Lead = {
+              id: `lead-imported-${Date.now()}-${index}`,
+              name,
+              phone,
+              company,
+              industry: (industryIdx !== -1 && values[industryIdx]) || 'General Commerce',
+              currentSoftware: (softwareIdx !== -1 && values[softwareIdx]) || 'Manual Registers',
+              preferredLanguage: ((langIdx !== -1 && values[langIdx]) as SupportedLanguage) || 'English',
+              status: 'New',
+              notes: (notesIdx !== -1 && values[notesIdx]) || 'Imported via CSV file'
+            };
+            onAddLead(newLead);
+            importedCount++;
+          }
+        });
+
+        setToastMessage(`Successfully imported ${importedCount} customer lead(s) from CSV!`);
+        setTimeout(() => setToastMessage(null), 4000);
+      } catch (err) {
+        console.error('CSV import error:', err);
+        setToastMessage("Failed to parse CSV file. Please check file format.");
+        setTimeout(() => setToastMessage(null), 3500);
+      } finally {
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+      }
+    };
+    reader.readAsText(file);
   };
 
   const handleSubmitNewLead = (e: React.FormEvent) => {
@@ -244,13 +349,42 @@ export const LeadsManager: React.FC<LeadsManagerProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={() => setShowAddModal(true)}
-          className="flex items-center justify-center space-x-2 px-5 py-2 bg-white hover:bg-slate-200 text-black font-bold text-xs uppercase tracking-wider rounded-full shadow-lg transition-all"
-        >
-          <UserPlus className="w-3.5 h-3.5 text-indigo-600" />
-          <span>Add New Lead</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2.5">
+          <input
+            type="file"
+            ref={fileInputRef}
+            onChange={handleImportCSV}
+            accept=".csv"
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            className="flex items-center justify-center space-x-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-semibold text-xs rounded-full shadow-md transition-all"
+            title="Import Customer Leads from CSV file"
+          >
+            <Upload className="w-3.5 h-3.5 text-indigo-400" />
+            <span>Import CSV</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleExportCSV}
+            className="flex items-center justify-center space-x-1.5 px-4 py-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-semibold text-xs rounded-full shadow-md transition-all"
+            title="Export Leads to CSV file"
+          >
+            <Download className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Export CSV</span>
+          </button>
+
+          <button
+            onClick={() => setShowAddModal(true)}
+            className="flex items-center justify-center space-x-2 px-5 py-2 bg-white hover:bg-slate-200 text-black font-bold text-xs uppercase tracking-wider rounded-full shadow-lg transition-all"
+          >
+            <UserPlus className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Add New Lead</span>
+          </button>
+        </div>
       </div>
 
       {/* Filters, Search & Score Sort Controls */}
@@ -392,8 +526,24 @@ export const LeadsManager: React.FC<LeadsManagerProps> = ({
             <tbody className="divide-y divide-slate-800">
               {sortedLeads.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="py-8 text-center text-slate-500 text-xs">
-                    No matching leads found. Try relaxing search filters.
+                  <td colSpan={7} className="py-12 text-center text-slate-400">
+                    <div className="space-y-3 max-w-sm mx-auto">
+                      <p className="text-sm font-medium text-slate-300">
+                        {leads.length === 0
+                          ? "No leads in directory. Add your customer leads to start AI Telecalling!"
+                          : "No matching leads found. Try relaxing search filters."}
+                      </p>
+                      {leads.length === 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setShowAddModal(true)}
+                          className="inline-flex items-center space-x-2 px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs uppercase tracking-wider rounded-full shadow-lg shadow-indigo-600/30 transition-all"
+                        >
+                          <UserPlus className="w-4 h-4" />
+                          <span>Add First Customer Lead</span>
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ) : (

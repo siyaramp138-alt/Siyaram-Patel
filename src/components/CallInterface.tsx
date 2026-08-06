@@ -10,7 +10,7 @@ import { EmailSummaryModal } from './EmailSummaryModal';
 import { CallAudioPlayer } from './CallAudioPlayer';
 
 interface CallInterfaceProps {
-  selectedLead: Lead;
+  selectedLead: Lead | null;
   systemConfig: SystemPromptConfig;
   onCallEnded: (session: CallSession, analysis?: any) => void;
   onDemoBooked: (booking: DemoBooking) => void;
@@ -48,12 +48,12 @@ export const CallInterface: React.FC<CallInterfaceProps> = ({
   const audioContextRef = useRef<AudioContext | null>(null);
 
   const [selectedLanguage, setSelectedLanguage] = useState<SupportedLanguage>(
-    selectedLead.preferredLanguage || systemConfig.language || 'English'
+    selectedLead?.preferredLanguage || systemConfig.language || 'English'
   );
 
   // Sync language when lead changes
   useEffect(() => {
-    if (selectedLead.preferredLanguage) {
+    if (selectedLead?.preferredLanguage) {
       setSelectedLanguage(selectedLead.preferredLanguage);
     }
   }, [selectedLead]);
@@ -431,6 +431,22 @@ export const CallInterface: React.FC<CallInterfaceProps> = ({
     const secs = seconds % 60;
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
+
+  if (!selectedLead) {
+    return (
+      <div className="max-w-4xl mx-auto px-4 py-20 text-center space-y-6">
+        <div className="w-16 h-16 bg-indigo-500/10 border border-indigo-500/20 rounded-3xl flex items-center justify-center mx-auto text-indigo-400">
+          <User className="w-8 h-8" />
+        </div>
+        <div className="space-y-2">
+          <h2 className="text-2xl font-bold text-white">No Customer Lead Selected</h2>
+          <p className="text-sm text-slate-400 max-w-md mx-auto">
+            Please add customer lead details in the <strong className="text-slate-200">Leads & Directory</strong> tab to initiate AI Telecalling.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
