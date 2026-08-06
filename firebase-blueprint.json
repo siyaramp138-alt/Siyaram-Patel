@@ -1,0 +1,65 @@
+{
+  "entities": {
+    "User": {
+      "title": "User Profile",
+      "description": "User profile synced with Firebase Auth",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "description": "Firebase Auth UID" },
+        "email": { "type": "string", "description": "User email address" },
+        "name": { "type": "string", "description": "Display name" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email"]
+    },
+    "Lead": {
+      "title": "Sales Lead",
+      "description": "Prospect lead entity for telecalling campaigns",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner user UID" },
+        "name": { "type": "string", "description": "Lead full name", "maxLength": 100 },
+        "phone": { "type": "string", "description": "Phone number", "maxLength": 30 },
+        "email": { "type": "string", "description": "Email address", "maxLength": 100 },
+        "company": { "type": "string", "description": "Company name", "maxLength": 100 },
+        "industry": { "type": "string", "description": "Industry sector", "maxLength": 50 },
+        "currentSoftware": { "type": "string", "description": "Current software tool used", "maxLength": 50 },
+        "preferredLanguage": { "type": "string", "description": "Preferred language for AI calling", "maxLength": 30 },
+        "status": { "type": "string", "description": "Lead status", "enum": ["New", "Contacted", "Demo Scheduled", "Callback Requested", "Closed"] },
+        "score": { "type": "integer", "description": "AI interest score (0-100)" },
+        "notes": { "type": "string", "description": "Call notes", "maxLength": 1000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "phone", "company"]
+    },
+    "CallLog": {
+      "title": "Call Recording & Log",
+      "description": "Call log recording transcript and metrics",
+      "type": "object",
+      "properties": {
+        "leadId": { "type": "string", "description": "Associated lead ID" },
+        "customerName": { "type": "string", "description": "Customer name" },
+        "durationSeconds": { "type": "integer", "description": "Call duration in seconds" },
+        "language": { "type": "string", "description": "Call language" },
+        "outcome": { "type": "string", "description": "Call outcome status" },
+        "summary": { "type": "string", "description": "AI summary of call", "maxLength": 2000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["customerName", "language", "outcome"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profile collection"
+    },
+    "/leads/{leadId}": {
+      "schema": { "$ref": "#/entities/Lead" },
+      "description": "Leads collection"
+    },
+    "/callLogs/{callLogId}": {
+      "schema": { "$ref": "#/entities/CallLog" },
+      "description": "Call logs and transcripts"
+    }
+  }
+}

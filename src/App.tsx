@@ -37,6 +37,22 @@ export default function App() {
     setLeads((prev) => [newLead, ...prev]);
   };
 
+  // Bulk Delete Leads
+  const handleDeleteLeads = (leadIds: string[]) => {
+    setLeads((prev) => prev.filter((l) => !leadIds.includes(l.id)));
+  };
+
+  // Bulk Assign Campaign to Leads
+  const handleAssignCampaignToLeads = (leadIds: string[], campaignTitle: string) => {
+    setLeads((prev) =>
+      prev.map((l) =>
+        leadIds.includes(l.id)
+          ? { ...l, campaignTitle, notes: l.notes ? `${l.notes} (Campaign: ${campaignTitle})` : `Campaign: ${campaignTitle}` }
+          : l
+      )
+    );
+  };
+
   // Add new demo booking
   const handleDemoBooked = (booking: DemoBooking) => {
     setDemoBookings((prev) => [booking, ...prev]);
@@ -100,8 +116,11 @@ export default function App() {
         {activeTab === 'leads' && (
           <LeadsManager
             leads={leads}
+            campaigns={campaigns}
             onSelectLeadToCall={handleSelectLeadToCall}
             onAddLead={handleAddLead}
+            onDeleteLeads={handleDeleteLeads}
+            onAssignCampaign={handleAssignCampaignToLeads}
           />
         )}
 

@@ -5,6 +5,7 @@ export const INITIAL_SYSTEM_PROMPT_CONFIG: SystemPromptConfig = {
   companyName: 'Grow Business Solutions',
   services: ['ERP Software', 'Automated Billing', 'Inventory Tracking', 'Custom Mobile Apps'],
   tone: 'Polite, natural, conversational, and persuasive',
+  language: 'English',
   fillerWordsEnabled: true,
   objectionRules: {
     busy: 'No problem at all, when would be a better time to call you back?',
@@ -40,6 +41,7 @@ export const INITIAL_LEADS: Lead[] = [
     industry: 'Logistics',
     currentSoftware: 'Manual Excel Sheets & Paper Invoices',
     status: 'New',
+    preferredLanguage: 'Hindi',
     notes: 'Struggling with billing delays and vehicle inventory tracking'
   },
   {
@@ -50,16 +52,18 @@ export const INITIAL_LEADS: Lead[] = [
     industry: 'Retail & Supermarket',
     currentSoftware: 'Basic Tally Prime',
     status: 'New',
+    preferredLanguage: 'Marathi',
     notes: 'Wants barcode inventory sync and WhatsApp billing for customers'
   },
   {
     id: 'lead-3',
-    name: 'Amit Verma',
+    name: 'Amit Banerjee',
     phone: '+91 97110 55432',
-    company: 'Vertex Precision Components',
+    company: 'Bengal Engineering Components',
     industry: 'Manufacturing',
     currentSoftware: 'Legacy Desktop ERP',
     status: 'New',
+    preferredLanguage: 'Bengali',
     notes: 'Needs mobile access for factory floor managers and order tracking'
   },
   {
@@ -70,6 +74,7 @@ export const INITIAL_LEADS: Lead[] = [
     industry: 'Pharma Wholesale',
     currentSoftware: 'Manual Registers',
     status: 'New',
+    preferredLanguage: 'English',
     notes: 'Batch expiry tracking and GST automated billing required'
   },
   {
@@ -80,6 +85,7 @@ export const INITIAL_LEADS: Lead[] = [
     industry: 'Wholesale & Distribution',
     currentSoftware: 'Tally 9',
     status: 'Demo Scheduled',
+    preferredLanguage: 'Hindi',
     notes: 'SIYA scheduled 10-min demo for tomorrow at 11 AM',
     lastCallDate: '2026-08-05'
   }

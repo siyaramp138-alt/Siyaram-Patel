@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { Settings, Save, Play, RefreshCw, CheckCircle2, Sparkles, Sliders, MessageSquare } from 'lucide-react';
-import { SystemPromptConfig } from '../types';
+import { Settings, Save, Play, RefreshCw, CheckCircle2, Sparkles, Sliders, Globe } from 'lucide-react';
+import { SystemPromptConfig, SupportedLanguage } from '../types';
+import { LANGUAGE_METADATA, LANGUAGE_PROMPTS } from '../data/languagePrompts';
 
 interface PromptEditorProps {
   config: SystemPromptConfig;
@@ -13,6 +14,23 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({ config, onSaveConfig
   const [testAiResponse, setTestAiResponse] = useState('');
   const [isTesting, setIsTesting] = useState(false);
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  const handleApplyLanguagePreset = (lang: SupportedLanguage) => {
+    setFormData((prev) => ({
+      ...prev,
+      language: lang,
+      customSystemPrompt: LANGUAGE_PROMPTS[lang]
+    }));
+    if (lang === 'Hindi') {
+      setTestUserMessage('नमस्कार, मैं पहले से Tally सॉफ्टवेयर इस्तेमाल कर रहा हूँ।');
+    } else if (lang === 'Marathi') {
+      setTestUserMessage('नमस्कार, मी आधीपासून Tally सॉफ्टवेअर वापरतो आहे.');
+    } else if (lang === 'Bengali') {
+      setTestUserMessage('নমস্কার, আমি আগে থেকেই Tally সফটওয়্যার ব্যবহার করছি।');
+    } else {
+      setTestUserMessage('Hi, I am already using Tally software for my billing.');
+    }
+  };
 
   const handleSave = () => {
     onSaveConfig(formData);
@@ -82,6 +100,51 @@ export const PromptEditor: React.FC<PromptEditorProps> = ({ config, onSaveConfig
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         {/* Left: System Prompt Textarea & Persona Settings */}
         <div className="lg:col-span-7 space-y-6">
+          {/* Language Preset Selection Bar */}
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-5 shadow-xl space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2 text-white font-bold text-xs uppercase tracking-wider">
+                <Globe className="w-4 h-4 text-indigo-400" />
+                <span>Telecalling Language Presets</span>
+              </div>
+              <span className="text-[11px] text-indigo-300 font-semibold bg-indigo-500/10 px-2.5 py-1 rounded-full border border-indigo-500/20">
+                Active: {LANGUAGE_METADATA[formData.language || 'English'].flag} {formData.language || 'English'} ({LANGUAGE_METADATA[formData.language || 'English'].nativeName})
+              </span>
+            </div>
+
+            <p className="text-xs text-slate-400">
+              Select a regional language to instantly load optimized SIYA telecaller system instructions:
+            </p>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {(['English', 'Hindi', 'Marathi', 'Bengali'] as SupportedLanguage[]).map((lang) => {
+                const meta = LANGUAGE_METADATA[lang];
+                const isActive = (formData.language || 'English') === lang;
+                return (
+                  <button
+                    key={lang}
+                    type="button"
+                    onClick={() => handleApplyLanguagePreset(lang)}
+                    className={`p-3 rounded-2xl border text-left flex flex-col justify-between transition-all ${
+                      isActive
+                        ? 'bg-indigo-600 border-indigo-500 text-white font-bold shadow-lg shadow-indigo-600/30'
+                        : 'bg-slate-950 border-slate-800 text-slate-300 hover:border-slate-700 hover:bg-slate-800/80'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between w-full">
+                      <span className="text-lg">{meta.flag}</span>
+                      {isActive && <CheckCircle2 className="w-4 h-4 text-white" />}
+                    </div>
+                    <div className="mt-2">
+                      <div className="text-xs font-bold">{meta.name}</div>
+                      <div className="text-[10px] opacity-80 font-mono">{meta.nativeName}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl space-y-4">
             <div className="flex items-center justify-between border-b border-slate-800 pb-3">
               <h3 className="font-bold text-white text-base flex items-center gap-2">

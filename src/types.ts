@@ -1,3 +1,5 @@
+export type SupportedLanguage = 'English' | 'Hindi' | 'Marathi' | 'Bengali';
+
 export interface Lead {
   id: string;
   name: string;
@@ -8,7 +10,9 @@ export interface Lead {
   status: 'New' | 'Calling' | 'Demo Scheduled' | 'Callback Requested' | 'Not Interested' | 'Completed';
   notes?: string;
   lastCallDate?: string;
+  campaignTitle?: string;
   score?: number; // 1 to 10 priority score
+  preferredLanguage?: SupportedLanguage;
 }
 
 export interface ConversationMessage {
@@ -83,6 +87,7 @@ export interface SystemPromptConfig {
   companyName: string;
   services: string[];
   tone: string;
+  language: SupportedLanguage;
   fillerWordsEnabled: boolean;
   objectionRules: {
     busy: string;

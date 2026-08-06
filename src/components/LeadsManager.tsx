@@ -1,24 +1,44 @@
 import React, { useState } from 'react';
-import { Users, PhoneCall, Plus, Search, Filter, CheckCircle2, Clock, XCircle, Building2, UserPlus, Flame, ArrowUpDown, Info, ChevronDown } from 'lucide-react';
-import { Lead } from '../types';
+import {
+  Users, PhoneCall, Plus, Search, Filter, CheckCircle2, Clock, XCircle,
+  Building2, UserPlus, Flame, ArrowUpDown, Info, ChevronDown, Mail,
+  CheckSquare, Square, Trash2, Megaphone, Download, Tag, AlertTriangle, X, Layers, Globe
+} from 'lucide-react';
+import { Lead, Campaign, SupportedLanguage } from '../types';
+import { LANGUAGE_METADATA } from '../data/languagePrompts';
 import { calculateLeadScore, ScoreBreakdown } from '../utils/leadScoring';
+import { EmailSummaryModal } from './EmailSummaryModal';
 
 interface LeadsManagerProps {
   leads: Lead[];
+  campaigns?: Campaign[];
   onSelectLeadToCall: (lead: Lead) => void;
   onAddLead: (newLead: Lead) => void;
+  onDeleteLeads?: (leadIds: string[]) => void;
+  onAssignCampaign?: (leadIds: string[], campaignTitle: string) => void;
 }
 
 export const LeadsManager: React.FC<LeadsManagerProps> = ({
   leads,
+  campaigns = [],
   onSelectLeadToCall,
-  onAddLead
+  onAddLead,
+  onDeleteLeads,
+  onAssignCampaign
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
   const [sortBy, setSortBy] = useState<'score-desc' | 'score-asc' | 'name' | 'company'>('score-desc');
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedScoreBreakdown, setSelectedScoreBreakdown] = useState<{ lead: Lead; breakdown: ScoreBreakdown } | null>(null);
+  const [selectedEmailLead, setSelectedEmailLead] = useState<Lead | null>(null);
+
+  // Multi-select state & bulk actions state
+  const [selectedLeadIds, setSelectedLeadIds] = useState<string[]>([]);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [targetCampaignName, setTargetCampaignName] = useState('');
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -26,6 +46,7 @@ export const LeadsManager: React.FC<LeadsManagerProps> = ({
     company: '',
     industry: 'Retail & Supermarket',
     currentSoftware: 'Manual Excel / Registers',
+    preferredLanguage: 'English' as SupportedLanguage,
     notes: ''
   });
 
@@ -51,6 +72,73 @@ export const LeadsManager: React.FC<LeadsManagerProps> = ({
     return 0;
   });
 
+  // Multi-select helpers
+  const visibleLeadIds = sortedLeads.map(({ lead }) => lead.id);
+  const isAllSelected = visibleLeadIds.length > 0 && visibleLeadIds.every((id) => selectedLeadIds.includes(id));
+
+  const handleToggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedLeadIds([]);
+    } else {
+      setSelectedLeadIds(visibleLeadIds);
+    }
+  };
+
+  const handleToggleSelectOne = (id: string) => {
+    setSelectedLeadIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const handleConfirmDelete = () => {
+    if (onDeleteLeads && selectedLeadIds.length > 0) {
+      onDeleteLeads(selectedLeadIds);
+    }
+    setToastMessage(`Successfully deleted ${selectedLeadIds.length} lead(s).`);
+    setSelectedLeadIds([]);
+    setShowDeleteModal(false);
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  const handleConfirmAssignCampaign = (campaignTitle: string) => {
+    if (!campaignTitle.trim()) return;
+    if (onAssignCampaign && selectedLeadIds.length > 0) {
+      onAssignCampaign(selectedLeadIds, campaignTitle.trim());
+    }
+    setToastMessage(`Assigned ${selectedLeadIds.length} lead(s) to "${campaignTitle.trim()}".`);
+    setSelectedLeadIds([]);
+    setShowAssignModal(false);
+    setTargetCampaignName('');
+    setTimeout(() => setToastMessage(null), 3500);
+  };
+
+  const handleExportCSV = () => {
+    const leadsToExport = leads.filter((l) => selectedLeadIds.includes(l.id));
+    if (leadsToExport.length === 0) return;
+
+    const headers = ['Name', 'Company', 'Phone', 'Industry', 'Current Software', 'Status', 'Campaign', 'Notes'];
+    const rows = leadsToExport.map((l) => [
+      `"${l.name.replace(/"/g, '""')}"`,
+      `"${l.company.replace(/"/g, '""')}"`,
+      `"${l.phone.replace(/"/g, '""')}"`,
+      `"${l.industry.replace(/"/g, '""')}"`,
+      `"${l.currentSoftware.replace(/"/g, '""')}"`,
+      `"${l.status}"`,
+      `"${(l.campaignTitle || '').replace(/"/g, '""')}"`,
+      `"${(l.notes || '').replace(/"/g, '""')}"`
+    ]);
+
+    const csvStr = [headers.join(','), ...rows.map((r) => r.join(','))].join('\n');
+    const blob = new Blob([csvStr], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `leads_export_${Date.now()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleSubmitNewLead = (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name || !formData.phone || !formData.company) return;
@@ -62,6 +150,7 @@ export const LeadsManager: React.FC<LeadsManagerProps> = ({
       company: formData.company,
       industry: formData.industry,
       currentSoftware: formData.currentSoftware,
+      preferredLanguage: formData.preferredLanguage,
       status: 'New',
       notes: formData.notes
     };
@@ -74,6 +163,7 @@ export const LeadsManager: React.FC<LeadsManagerProps> = ({
       company: '',
       industry: 'Retail & Supermarket',
       currentSoftware: 'Manual Excel / Registers',
+      preferredLanguage: 'English',
       notes: ''
     });
   };
@@ -211,12 +301,86 @@ export const LeadsManager: React.FC<LeadsManagerProps> = ({
         </div>
       </div>
 
+      {/* Toast Banner */}
+      {toastMessage && (
+        <div className="bg-emerald-500/20 border border-emerald-500/40 p-4 rounded-2xl flex items-center justify-between text-emerald-300 text-xs font-semibold shadow-xl animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center space-x-2">
+            <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+            <span>{toastMessage}</span>
+          </div>
+          <button onClick={() => setToastMessage(null)} className="text-emerald-400 hover:text-white">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
+      {/* Bulk Action Toolbar */}
+      {selectedLeadIds.length > 0 && (
+        <div className="bg-indigo-950/90 border border-indigo-500/40 p-4 rounded-2xl flex flex-wrap items-center justify-between gap-3 shadow-2xl backdrop-blur-md animate-in fade-in slide-in-from-top-2">
+          <div className="flex items-center space-x-3 text-white">
+            <div className="w-8 h-8 rounded-xl bg-indigo-600/30 border border-indigo-400/40 flex items-center justify-center text-indigo-300">
+              <CheckSquare className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="font-bold text-sm">{selectedLeadIds.length} Lead{selectedLeadIds.length > 1 ? 's' : ''} Selected</span>
+              <p className="text-[11px] text-indigo-300/80">Execute batch operations across selected contacts</p>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => {
+                setTargetCampaignName(campaigns[0]?.title || 'Retail ERP Upgrade Sprint');
+                setShowAssignModal(true);
+              }}
+              className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-md shadow-indigo-600/30 transition-all"
+            >
+              <Megaphone className="w-3.5 h-3.5" />
+              <span>Assign to Campaign</span>
+            </button>
+
+            <button
+              onClick={() => setShowDeleteModal(true)}
+              className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 text-rose-300 font-semibold text-xs transition-all"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>Delete ({selectedLeadIds.length})</span>
+            </button>
+
+            <button
+              onClick={handleExportCSV}
+              className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-medium transition-all"
+            >
+              <Download className="w-3.5 h-3.5 text-indigo-400" />
+              <span>Export CSV</span>
+            </button>
+
+            <button
+              onClick={() => setSelectedLeadIds([])}
+              className="p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-400 hover:text-white transition-all ml-1"
+              title="Deselect all"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Leads Table */}
       <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-xl">
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm text-slate-300">
             <thead className="bg-slate-950/80 text-slate-400 text-xs font-bold uppercase border-b border-slate-800">
               <tr>
+                <th className="py-4 px-4 w-12 text-center">
+                  <input
+                    type="checkbox"
+                    checked={isAllSelected}
+                    onChange={handleToggleSelectAll}
+                    className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-900 accent-indigo-500 cursor-pointer"
+                    title={isAllSelected ? "Deselect all visible leads" : "Select all visible leads"}
+                  />
+                </th>
                 <th className="py-4 px-6">Customer & Company</th>
                 <th className="py-4 px-6">Lead Score (1-10)</th>
                 <th className="py-4 px-6">Phone Number</th>
@@ -228,51 +392,93 @@ export const LeadsManager: React.FC<LeadsManagerProps> = ({
             <tbody className="divide-y divide-slate-800">
               {sortedLeads.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-slate-500 text-xs">
+                  <td colSpan={7} className="py-8 text-center text-slate-500 text-xs">
                     No matching leads found. Try relaxing search filters.
                   </td>
                 </tr>
               ) : (
-                sortedLeads.map(({ lead, breakdown }) => (
-                  <tr key={lead.id} className="hover:bg-slate-800/50 transition-all">
-                    <td className="py-4 px-6">
-                      <div className="font-bold text-white text-base">{lead.name}</div>
-                      <div className="text-xs text-slate-400 flex items-center space-x-1 mt-0.5">
-                        <Building2 className="w-3 h-3 text-indigo-400" />
-                        <span>{lead.company}</span>
-                      </div>
-                    </td>
+                sortedLeads.map(({ lead, breakdown }) => {
+                  const isSelected = selectedLeadIds.includes(lead.id);
+                  return (
+                    <tr
+                      key={lead.id}
+                      className={`transition-all ${
+                        isSelected
+                          ? 'bg-indigo-950/40 border-l-4 border-l-indigo-500 hover:bg-indigo-950/60'
+                          : 'hover:bg-slate-800/50'
+                      }`}
+                    >
+                      <td className="py-4 px-4 text-center">
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => handleToggleSelectOne(lead.id)}
+                          className="w-4 h-4 rounded border-slate-700 bg-slate-950 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-900 accent-indigo-500 cursor-pointer"
+                        />
+                      </td>
 
-                    <td className="py-4 px-6">
-                      {getScoreBadge(breakdown.score, () =>
-                        setSelectedScoreBreakdown({ lead, breakdown })
-                      )}
-                    </td>
+                      <td className="py-4 px-6">
+                        <div className="font-bold text-white text-base flex flex-wrap items-center gap-2">
+                          <span>{lead.name}</span>
+                          {lead.preferredLanguage && LANGUAGE_METADATA[lead.preferredLanguage] && (
+                            <span className="text-[10px] bg-slate-800 text-indigo-300 border border-slate-700 px-2 py-0.5 rounded-full font-medium flex items-center gap-1 font-mono">
+                              <span>{LANGUAGE_METADATA[lead.preferredLanguage].flag}</span>
+                              <span>{lead.preferredLanguage}</span>
+                            </span>
+                          )}
+                          {lead.campaignTitle && (
+                            <span className="text-[10px] bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-full font-medium flex items-center gap-1">
+                              <Megaphone className="w-2.5 h-2.5" />
+                              <span>{lead.campaignTitle}</span>
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-xs text-slate-400 flex items-center space-x-1 mt-0.5">
+                          <Building2 className="w-3 h-3 text-indigo-400" />
+                          <span>{lead.company}</span>
+                        </div>
+                      </td>
 
-                    <td className="py-4 px-6 font-mono text-slate-300">{lead.phone}</td>
+                      <td className="py-4 px-6">
+                        {getScoreBadge(breakdown.score, () =>
+                          setSelectedScoreBreakdown({ lead, breakdown })
+                        )}
+                      </td>
 
-                    <td className="py-4 px-6">
-                      <span className="text-xs font-semibold px-2 py-0.5 rounded bg-slate-800 text-slate-300">
-                        {lead.industry}
-                      </span>
-                      <div className="text-xs text-slate-400 mt-1">
-                        Using: <span className="text-slate-300">{lead.currentSoftware}</span>
-                      </div>
-                    </td>
+                      <td className="py-4 px-6 font-mono text-slate-300">{lead.phone}</td>
 
-                    <td className="py-4 px-6">{getStatusBadge(lead.status)}</td>
+                      <td className="py-4 px-6">
+                        <span className="text-xs font-semibold px-2 py-0.5 rounded bg-slate-800 text-slate-300">
+                          {lead.industry}
+                        </span>
+                        <div className="text-xs text-slate-400 mt-1">
+                          Using: <span className="text-slate-300">{lead.currentSoftware}</span>
+                        </div>
+                      </td>
 
-                    <td className="py-4 px-6 text-right">
-                      <button
-                        onClick={() => onSelectLeadToCall(lead)}
-                        className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-medium text-xs rounded-full transition-all"
-                      >
-                        <PhoneCall className="w-3.5 h-3.5 text-indigo-400" />
-                        <span>Call with SIYA</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                      <td className="py-4 px-6">{getStatusBadge(lead.status)}</td>
+
+                      <td className="py-4 px-6 text-right space-x-2">
+                        <button
+                          onClick={() => setSelectedEmailLead(lead)}
+                          className="inline-flex items-center space-x-1 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-indigo-400 font-medium text-xs rounded-full transition-all"
+                          title="Draft & send client summary email"
+                        >
+                          <Mail className="w-3.5 h-3.5" />
+                          <span>Email</span>
+                        </button>
+
+                        <button
+                          onClick={() => onSelectLeadToCall(lead)}
+                          className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-medium text-xs rounded-full transition-all"
+                        >
+                          <PhoneCall className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>Call with SIYA</span>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
@@ -401,6 +607,20 @@ export const LeadsManager: React.FC<LeadsManagerProps> = ({
                 />
               </div>
 
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Preferred Telecalling Language</label>
+                <select
+                  value={formData.preferredLanguage}
+                  onChange={(e) => setFormData({ ...formData, preferredLanguage: e.target.value as SupportedLanguage })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="English">🌐 English</option>
+                  <option value="Hindi">🇮🇳 Hindi (हिंदी)</option>
+                  <option value="Marathi">🇮🇳 Marathi (मराठी)</option>
+                  <option value="Bengali">🇮🇳 Bengali (বাংলা)</option>
+                </select>
+              </div>
+
               <div className="flex items-center justify-end space-x-3 pt-3">
                 <button
                   type="button"
@@ -418,6 +638,174 @@ export const LeadsManager: React.FC<LeadsManagerProps> = ({
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Selected Lead Email Summary Modal */}
+      {selectedEmailLead && (
+        <EmailSummaryModal
+          isOpen={!!selectedEmailLead}
+          onClose={() => setSelectedEmailLead(null)}
+          leadData={{
+            name: selectedEmailLead.name,
+            company: selectedEmailLead.company,
+            phone: selectedEmailLead.phone,
+            email: selectedEmailLead.email,
+            industry: selectedEmailLead.industry,
+            currentSoftware: selectedEmailLead.currentSoftware
+          }}
+          demoData={{
+            demoDate: 'Tomorrow',
+            demoTime: '11:00 AM',
+            assignedExpert: 'Rohan Gupta (Senior Consultant)',
+            notes: `Lead status: ${selectedEmailLead.status}.`
+          }}
+          callSummary={`Post-call executive summary draft for ${selectedEmailLead.name} (${selectedEmailLead.company}).`}
+        />
+      )}
+
+      {/* Assign to Campaign Modal */}
+      {showAssignModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full text-white shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center space-x-2">
+                <Megaphone className="w-5 h-5 text-indigo-400" />
+                <h3 className="font-bold text-base">Assign Selected Leads to Campaign</h3>
+              </div>
+              <button onClick={() => setShowAssignModal(false)} className="text-slate-400 hover:text-white">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-400">
+              Targeting <span className="font-bold text-white font-mono">{selectedLeadIds.length} lead(s)</span>. Select an existing campaign or enter a new target campaign title below.
+            </p>
+
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">
+                  Preset / Existing Campaigns:
+                </label>
+                <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                  {[
+                    'Retail ERP Upgrade Sprint',
+                    'Supermarket POS Automation',
+                    'Pharma Compliance 2026',
+                    'Manufacturing Digital Drive',
+                    ...campaigns.map((c) => c.title)
+                  ]
+                    .filter((value, index, self) => self.indexOf(value) === index)
+                    .map((campTitle) => (
+                      <button
+                        key={campTitle}
+                        type="button"
+                        onClick={() => setTargetCampaignName(campTitle)}
+                        className={`w-full text-left p-2.5 rounded-xl border text-xs flex items-center justify-between transition-all ${
+                          targetCampaignName === campTitle
+                            ? 'bg-indigo-600/20 border-indigo-500 text-white font-semibold'
+                            : 'bg-slate-950 border-slate-800 text-slate-300 hover:bg-slate-800'
+                        }`}
+                      >
+                        <span className="flex items-center gap-2">
+                          <Tag className="w-3.5 h-3.5 text-indigo-400" />
+                          <span>{campTitle}</span>
+                        </span>
+                        {targetCampaignName === campTitle && <CheckCircle2 className="w-4 h-4 text-indigo-400" />}
+                      </button>
+                    ))}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">
+                  Or Custom Campaign Title:
+                </label>
+                <input
+                  type="text"
+                  value={targetCampaignName}
+                  onChange={(e) => setTargetCampaignName(e.target.value)}
+                  placeholder="e.g. Q3 Regional Outreach Drive"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowAssignModal(false)}
+                className="px-4 py-2 text-xs font-medium text-slate-400 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleConfirmAssignCampaign(targetCampaignName)}
+                disabled={!targetCampaignName.trim()}
+                className="flex items-center space-x-1.5 px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-indigo-600/30 disabled:opacity-50"
+              >
+                <Megaphone className="w-3.5 h-3.5" />
+                <span>Assign {selectedLeadIds.length} Lead(s)</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-md w-full text-white shadow-2xl space-y-4">
+            <div className="flex items-center space-x-3 text-rose-400 pb-2 border-b border-slate-800">
+              <div className="w-10 h-10 rounded-2xl bg-rose-500/20 border border-rose-500/30 flex items-center justify-center">
+                <AlertTriangle className="w-5 h-5 text-rose-400" />
+              </div>
+              <div>
+                <h3 className="font-bold text-base text-white">Delete Selected Leads</h3>
+                <p className="text-xs text-rose-400/90 font-mono">Irreversible Action</p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Are you sure you want to permanently delete <strong className="text-white font-mono">{selectedLeadIds.length} selected lead(s)</strong> from your directory?
+            </p>
+
+            <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 max-h-32 overflow-y-auto space-y-1 text-xs font-mono">
+              {leads
+                .filter((l) => selectedLeadIds.includes(l.id))
+                .slice(0, 5)
+                .map((l) => (
+                  <div key={l.id} className="text-slate-300 flex justify-between">
+                    <span>{l.name}</span>
+                    <span className="text-slate-500">{l.company}</span>
+                  </div>
+                ))}
+              {selectedLeadIds.length > 5 && (
+                <div className="text-slate-500 italic text-[11px] pt-1">
+                  ...and {selectedLeadIds.length - 5} more
+                </div>
+              )}
+            </div>
+
+            <div className="flex items-center justify-end space-x-2 pt-2 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowDeleteModal(false)}
+                className="px-4 py-2 text-xs font-medium text-slate-400 hover:text-white"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                className="flex items-center space-x-1.5 px-5 py-2 bg-rose-600 hover:bg-rose-500 text-white font-bold text-xs uppercase tracking-wider rounded-xl shadow-lg shadow-rose-600/30"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>Delete {selectedLeadIds.length} Lead(s)</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

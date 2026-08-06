@@ -2,9 +2,12 @@ import React, { useState, useEffect, useRef } from 'react';
 import {
   Phone, PhoneOff, Mic, MicOff, Volume2, VolumeX, AlertCircle,
   Play, Send, RefreshCw, Calendar, Sparkles, User, Bot,
-  Award, FileText, FastForward, Activity, ShieldCheck
+  Award, FileText, FastForward, Activity, ShieldCheck, Mail, Globe, CheckCircle2
 } from 'lucide-react';
-import { Lead, ConversationMessage, CallSession, SystemPromptConfig, DemoBooking } from '../types';
+import { Lead, ConversationMessage, CallSession, SystemPromptConfig, DemoBooking, SupportedLanguage } from '../types';
+import { LANGUAGE_METADATA, LANGUAGE_PROMPTS } from '../data/languagePrompts';
+import { EmailSummaryModal } from './EmailSummaryModal';
+import { CallAudioPlayer } from './CallAudioPlayer';
 
 interface CallInterfaceProps {
   selectedLead: Lead;
@@ -36,11 +39,24 @@ export const CallInterface: React.FC<CallInterfaceProps> = ({
   const [callDuration, setCallDuration] = useState(0);
   const [voiceSource, setVoiceSource] = useState<'gemini_tts' | 'browser_tts'>('gemini_tts');
   const [lastAnalysis, setLastAnalysis] = useState<any>(null);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [lastBookedDemo, setLastBookedDemo] = useState<DemoBooking | null>(null);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const recognitionRef = useRef<any>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
+
+  const [selectedLanguage, setSelectedLanguage] = useState<SupportedLanguage>(
+    selectedLead.preferredLanguage || systemConfig.language || 'English'
+  );
+
+  // Sync language when lead changes
+  useEffect(() => {
+    if (selectedLead.preferredLanguage) {
+      setSelectedLanguage(selectedLead.preferredLanguage);
+    }
+  }, [selectedLead]);
 
   // Initialize Web Speech Recognition if supported
   useEffect(() => {
@@ -49,7 +65,7 @@ export const CallInterface: React.FC<CallInterfaceProps> = ({
       const rec = new SpeechRecognition();
       rec.continuous = false;
       rec.interimResults = true;
-      rec.lang = 'en-US';
+      rec.lang = LANGUAGE_METADATA[selectedLanguage]?.bcp47 || 'en-IN';
 
       rec.onresult = (event: any) => {
         const transcript = Array.from(event.results)
@@ -74,7 +90,7 @@ export const CallInterface: React.FC<CallInterfaceProps> = ({
 
       recognitionRef.current = rec;
     }
-  }, [isAiSpeaking]);
+  }, [isAiSpeaking, selectedLanguage]);
 
   // Duration Timer
   useEffect(() => {
@@ -171,6 +187,13 @@ export const CallInterface: React.FC<CallInterfaceProps> = ({
         if (data.success && data.analysis) {
           setLastAnalysis(data.analysis);
           onCallEnded(endedSession, data.analysis);
+          if (
+            data.analysis.outcome === 'Demo Booked' ||
+            data.analysis.outcome === 'Demo Scheduled' ||
+            lastBookedDemo
+          ) {
+            setShowEmailModal(true);
+          }
         } else {
           onCallEnded(endedSession);
         }
@@ -239,6 +262,7 @@ export const CallInterface: React.FC<CallInterfaceProps> = ({
           history: historyForApi,
           userSpeech: userText,
           customPrompt: systemConfig.customSystemPrompt,
+          language: selectedLanguage,
           interrupted: wasInterrupted,
           generateAudio: useAudio
         })
@@ -282,6 +306,7 @@ export const CallInterface: React.FC<CallInterfaceProps> = ({
             notes: `Booked by SIYA. Sentiment: ${data.sentiment || 'Interested'}.`
           };
           onDemoBooked(booking);
+          setLastBookedDemo(booking);
         }
 
         // Play Spoken Voice
@@ -333,12 +358,14 @@ export const CallInterface: React.FC<CallInterfaceProps> = ({
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.rate = 1.0;
       utterance.pitch = 1.1; // Slightly higher polite female pitch
+      utterance.lang = LANGUAGE_METADATA[selectedLanguage]?.bcp47 || 'en-IN';
 
-      // Try finding female voice
+      // Try finding regional voice matching language or female voice
       const voices = window.speechSynthesis.getVoices();
-      const femaleVoice = voices.find(v => v.name.toLowerCase().includes('female') || v.name.includes('Google US English') || v.name.includes('Samantha') || v.name.includes('Zira'));
-      if (femaleVoice) {
-        utterance.voice = femaleVoice;
+      const regionalVoice = voices.find(v => v.lang.startsWith(LANGUAGE_METADATA[selectedLanguage]?.bcp47.split('-')[0] || 'en')) ||
+        voices.find(v => v.name.toLowerCase().includes('female') || v.name.includes('Google') || v.name.includes('Samantha') || v.name.includes('Zira'));
+      if (regionalVoice) {
+        utterance.voice = regionalVoice;
       }
 
       utterance.onend = () => {
@@ -407,6 +434,42 @@ export const CallInterface: React.FC<CallInterfaceProps> = ({
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+      {/* Active Language Switcher Bar */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3.5 px-5 shadow-lg flex flex-col sm:flex-row items-center justify-between gap-3 text-white">
+        <div className="flex items-center space-x-2.5">
+          <Globe className="w-4 h-4 text-indigo-400 animate-pulse" />
+          <span className="text-xs font-bold uppercase tracking-wider text-slate-300">
+            SIYA AI Telecalling Language:
+          </span>
+          <span className="text-xs font-bold text-indigo-400 bg-indigo-500/10 px-2.5 py-0.5 rounded-full border border-indigo-500/20">
+            {LANGUAGE_METADATA[selectedLanguage].flag} {LANGUAGE_METADATA[selectedLanguage].name} ({LANGUAGE_METADATA[selectedLanguage].nativeName})
+          </span>
+        </div>
+
+        <div className="flex items-center space-x-1.5 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0">
+          {(['English', 'Hindi', 'Marathi', 'Bengali'] as SupportedLanguage[]).map((lang) => {
+            const meta = LANGUAGE_METADATA[lang];
+            const isSelected = selectedLanguage === lang;
+            return (
+              <button
+                key={lang}
+                type="button"
+                onClick={() => setSelectedLanguage(lang)}
+                className={`flex items-center space-x-1.5 px-3 py-1.5 rounded-xl text-xs font-medium transition-all ${
+                  isSelected
+                    ? 'bg-indigo-600 text-white font-bold shadow-md shadow-indigo-600/30'
+                    : 'bg-slate-950 text-slate-400 hover:text-white hover:bg-slate-800 border border-slate-800'
+                }`}
+              >
+                <span>{meta.flag}</span>
+                <span>{meta.name}</span>
+                <span className="text-[10px] opacity-75 font-mono">({meta.nativeName})</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Top Banner / Customer Info Bar */}
       <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 sm:p-5 text-white shadow-xl flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
         <div className="flex items-center space-x-4">
@@ -646,22 +709,42 @@ export const CallInterface: React.FC<CallInterfaceProps> = ({
           {/* Quick Objections Simulator */}
           <div className="bg-slate-900/50 border border-slate-800 p-4 rounded-2xl space-y-2">
             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">
-              Test Objections
+              Test Objections ({LANGUAGE_METADATA[selectedLanguage].nativeName})
             </span>
             <div className="flex flex-col gap-1.5">
               <button
-                onClick={() => triggerObjection("I am extremely busy right now, call later!")}
+                onClick={() =>
+                  triggerObjection(
+                    selectedLanguage === 'Hindi'
+                      ? 'मैं अभी बहुत व्यस्त हूँ, बाद में कॉल कीजिए!'
+                      : selectedLanguage === 'Marathi'
+                      ? 'मी सध्या खूप व्यस्त आहे, नंतर फोन करा!'
+                      : selectedLanguage === 'Bengali'
+                      ? 'আমি এখন ভীষণ ব্যস্ত, পরে কল করবেন!'
+                      : 'I am extremely busy right now, call later!'
+                  )
+                }
                 disabled={!isCallActive || isLoading}
                 className="text-left text-[11px] p-2 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 transition-all disabled:opacity-40"
               >
-                🕒 "I am busy right now"
+                🕒 {selectedLanguage === 'Hindi' ? '"मैं अभी व्यस्त हूँ"' : selectedLanguage === 'Marathi' ? '"मी व्यस्त आहे"' : selectedLanguage === 'Bengali' ? '"আমি এখন ব্যস্ত"' : '"I am busy right now"'}
               </button>
               <button
-                onClick={() => triggerObjection("We are already using Tally software.")}
+                onClick={() =>
+                  triggerObjection(
+                    selectedLanguage === 'Hindi'
+                      ? 'हम पहले से टैली सॉफ्टवेयर का उपयोग कर रहे हैं।'
+                      : selectedLanguage === 'Marathi'
+                      ? 'आम्ही आधीपासून टॅली सॉफ्टवेअर वापरत आहोत.'
+                      : selectedLanguage === 'Bengali'
+                      ? 'আমরা আগে থেকেই ট্যালি সফটওয়্যার ব্যবহার করছি।'
+                      : 'We are already using Tally software.'
+                  )
+                }
                 disabled={!isCallActive || isLoading}
                 className="text-left text-[11px] p-2 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 text-slate-300 transition-all disabled:opacity-40"
               >
-                💼 "We already use software"
+                💼 {selectedLanguage === 'Hindi' ? '"पहले से सॉफ्टवेयर है"' : selectedLanguage === 'Marathi' ? '"आधीपासून सॉफ्टवेअर आहे"' : selectedLanguage === 'Bengali' ? '"আগে থেকেই সফটওয়্যার আছে"' : '"We already use software"'}
               </button>
             </div>
           </div>
@@ -693,12 +776,45 @@ export const CallInterface: React.FC<CallInterfaceProps> = ({
             </div>
 
             <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
-              <h4 className="text-xs font-bold text-slate-300 uppercase">Call Summary</h4>
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-slate-300 uppercase">Call Summary</h4>
+                <button
+                  onClick={() => setShowEmailModal(true)}
+                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs shadow-md shadow-indigo-600/20 transition-all"
+                >
+                  <Mail className="w-3.5 h-3.5" />
+                  <span>Draft & Send Summary Email</span>
+                </button>
+              </div>
               <p className="text-xs text-slate-300 leading-relaxed">{lastAnalysis.summary}</p>
             </div>
           </div>
         )}
       </div>
+
+      {/* Past Call Recordings Audio Player */}
+      <CallAudioPlayer selectedLead={selectedLead} />
+
+      {/* Auto Draft Summary Email Modal */}
+      <EmailSummaryModal
+        isOpen={showEmailModal}
+        onClose={() => setShowEmailModal(false)}
+        leadData={{
+          name: selectedLead.name,
+          company: selectedLead.company,
+          phone: selectedLead.phone,
+          email: selectedLead.email,
+          industry: selectedLead.industry,
+          currentSoftware: selectedLead.currentSoftware
+        }}
+        demoData={{
+          demoDate: lastBookedDemo?.demoDate || 'Tomorrow',
+          demoTime: lastBookedDemo?.demoTime || '11:00 AM',
+          assignedExpert: lastBookedDemo?.assignedExpert || 'Rohan Gupta (Senior Consultant)',
+          notes: lastBookedDemo?.notes || lastAnalysis?.summary
+        }}
+        callSummary={lastAnalysis?.summary || `Call session completed with ${selectedLead.name}. Demo booked for ${selectedLead.company}.`}
+      />
     </div>
   );
 };

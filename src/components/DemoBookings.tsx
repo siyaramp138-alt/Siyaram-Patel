@@ -1,12 +1,81 @@
-import React from 'react';
-import { CalendarCheck, Clock, UserCheck, Phone, CheckCircle2, Copy, Sparkles, Building2 } from 'lucide-react';
+import React, { useState } from 'react';
+import { CalendarCheck, Clock, UserCheck, Phone, CheckCircle2, Copy, Sparkles, Building2, Calendar, ExternalLink, Download, Check, Mail, Video, Loader2 } from 'lucide-react';
 import { DemoBooking } from '../types';
+import { EmailSummaryModal } from './EmailSummaryModal';
+import { createGoogleMeetSpace } from '../lib/googleMeet';
 
 interface DemoBookingsProps {
   bookings: DemoBooking[];
 }
 
 export const DemoBookings: React.FC<DemoBookingsProps> = ({ bookings }) => {
+  const [syncedBooking, setSyncedBooking] = useState<DemoBooking | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [emailBooking, setEmailBooking] = useState<DemoBooking | null>(null);
+
+  // Google Meet links state by booking ID
+  const [meetLinks, setMeetLinks] = useState<Record<string, string>>({});
+  const [generatingMeetId, setGeneratingMeetId] = useState<string | null>(null);
+
+  const handleCreateGoogleMeet = async (booking: DemoBooking) => {
+    setGeneratingMeetId(booking.id);
+    try {
+      const space = await createGoogleMeetSpace();
+      setMeetLinks((prev) => ({ ...prev, [booking.id]: space.meetingUri }));
+    } catch (err) {
+      console.error('Failed to create Meet space:', err);
+    } finally {
+      setGeneratingMeetId(null);
+    }
+  };
+
+  const generateGoogleCalendarUrl = (booking: DemoBooking) => {
+    const meetUrl = meetLinks[booking.id] ? `\nGoogle Meet Link: ${meetLinks[booking.id]}` : '';
+    const title = encodeURIComponent(`10-Min Software Demo: ${booking.companyName} x Grow Business Solutions`);
+    const details = encodeURIComponent(
+      `Customer Demo Session\n\nClient: ${booking.customerName}\nCompany: ${booking.companyName}\nPhone: ${booking.phone}\nAssigned Consultant: ${booking.assignedExpert}\nInterested Solutions: ${booking.interestedServices.join(', ')}${meetUrl}\n\nNotes: ${booking.notes}`
+    );
+    const location = encodeURIComponent(meetLinks[booking.id] || `Phone Call / Online Demo (${booking.phone})`);
+
+    // Parse date & time string e.g., "Tomorrow", "Aug 10", "11:00 AM"
+    // Create default start date today/tomorrow or fallback
+    const now = new Date();
+    const startDate = new Date(now.getTime() + 24 * 60 * 60 * 1000); // Default tomorrow
+    const endDate = new Date(startDate.getTime() + 15 * 60 * 1000); // 15 min duration
+
+    const formatGCalDate = (d: Date) => d.toISOString().replace(/-|:|\.\d\d\d/g, '');
+    const dates = `${formatGCalDate(startDate)}/${formatGCalDate(endDate)}`;
+
+    return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&details=${details}&location=${location}&dates=${dates}`;
+  };
+
+  const handleOpenGoogleCalendar = (booking: DemoBooking) => {
+    const url = generateGoogleCalendarUrl(booking);
+    window.open(url, '_blank', 'noopener,noreferrer');
+    setSyncedBooking(booking);
+  };
+
+  const handleDownloadICS = (booking: DemoBooking) => {
+    const icsContent = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//Grow Business Solutions//SIYA AI Telecaller//EN
+BEGIN:VEVENT
+SUMMARY:10-Min Software Demo: ${booking.companyName}
+DESCRIPTION:Client: ${booking.customerName}\\nPhone: ${booking.phone}\\nExpert: ${booking.assignedExpert}\\nNotes: ${booking.notes}
+LOCATION:Phone Call (${booking.phone})
+STATUS:CONFIRMED
+END:VEVENT
+END:VCALENDAR`;
+
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const link = document.createElement('a');
+    link.href = window.URL.createObjectURL(blob);
+    link.setAttribute('download', `demo-${booking.companyName.toLowerCase().replace(/\s+/g, '-')}.ics`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleCopyInvite = (booking: DemoBooking) => {
     const inviteText = `10-Minute Software Demo Invitation - Grow Business Solutions
 Client: ${booking.customerName} (${booking.companyName})
@@ -17,7 +86,8 @@ Interested Solutions: ${booking.interestedServices.join(', ')}
 Notes: ${booking.notes}`;
 
     navigator.clipboard.writeText(inviteText);
-    alert('Demo invite copied to clipboard!');
+    setCopiedId(booking.id);
+    setTimeout(() => setCopiedId(null), 3000);
   };
 
   return (
@@ -89,6 +159,45 @@ Notes: ${booking.notes}`;
                     </span>
                     <span className="font-medium text-slate-200">{booking.assignedExpert}</span>
                   </div>
+
+                  {/* Google Meet Link Section */}
+                  <div className="pt-2 border-t border-slate-800/80">
+                    {meetLinks[booking.id] ? (
+                      <div className="flex items-center justify-between bg-emerald-500/10 border border-emerald-500/30 p-2 rounded-xl">
+                        <div className="flex items-center space-x-1.5 text-emerald-400 text-[11px] truncate">
+                          <Video className="w-3.5 h-3.5 flex-shrink-0" />
+                          <span className="font-mono font-bold truncate">{meetLinks[booking.id]}</span>
+                        </div>
+                        <a
+                          href={meetLinks[booking.id]}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="px-2 py-0.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[10px] font-bold transition-all flex items-center gap-1"
+                        >
+                          Join <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleCreateGoogleMeet(booking)}
+                        disabled={generatingMeetId === booking.id}
+                        className="w-full flex items-center justify-center space-x-1.5 py-1.5 px-3 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded-xl text-indigo-300 text-xs font-semibold transition-all disabled:opacity-50"
+                      >
+                        {generatingMeetId === booking.id ? (
+                          <>
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+                            <span>Creating Meet Space...</span>
+                          </>
+                        ) : (
+                          <>
+                            <Video className="w-3.5 h-3.5 text-emerald-400" />
+                            <span>Create Google Meet Space</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 <div>
@@ -111,20 +220,110 @@ Notes: ${booking.notes}`;
                 )}
               </div>
 
-              <div className="pt-2 border-t border-slate-800 flex items-center justify-between text-xs text-slate-500">
-                <span>Booked: {booking.bookedAt}</span>
-                <button
-                  onClick={() => handleCopyInvite(booking)}
-                  className="flex items-center space-x-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium transition-all"
-                >
-                  <Copy className="w-3.5 h-3.5" />
-                  <span>Copy Invite</span>
-                </button>
+              <div className="pt-3 border-t border-slate-800 flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <button
+                    onClick={() => handleOpenGoogleCalendar(booking)}
+                    className="flex-1 flex items-center justify-center space-x-1.5 px-3 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs transition-all shadow-md shadow-indigo-600/20"
+                  >
+                    <Calendar className="w-3.5 h-3.5" />
+                    <span>Sync Google Calendar</span>
+                    <ExternalLink className="w-3 h-3 opacity-70" />
+                  </button>
+
+                  <button
+                    onClick={() => handleDownloadICS(booking)}
+                    className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-all"
+                    title="Download .ics Calendar File"
+                  >
+                    <Download className="w-3.5 h-3.5" />
+                  </button>
+
+                  <button
+                    onClick={() => setEmailBooking(booking)}
+                    className="flex items-center space-x-1 px-2.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-400 font-semibold text-xs transition-all border border-indigo-500/30"
+                    title="Draft and send client summary email"
+                  >
+                    <Mail className="w-3.5 h-3.5" />
+                    <span>Email</span>
+                  </button>
+                </div>
+
+                <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
+                  <span>Booked: {booking.bookedAt}</span>
+                  <button
+                    onClick={() => handleCopyInvite(booking)}
+                    className="flex items-center space-x-1 text-slate-400 hover:text-white font-medium transition-all"
+                  >
+                    {copiedId === booking.id ? (
+                      <>
+                        <Check className="w-3 h-3 text-emerald-400" />
+                        <span className="text-emerald-400">Copied!</span>
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3 h-3" />
+                        <span>Copy Invite</span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </div>
           ))}
         </div>
       )}
+
+      {/* Sync Overlay Modal Confirmation */}
+      {syncedBooking && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-emerald-500/30 rounded-3xl p-6 max-w-md w-full text-white shadow-2xl space-y-4">
+            <div className="flex items-center space-x-3 text-emerald-400">
+              <CheckCircle2 className="w-6 h-6" />
+              <h3 className="font-bold text-base">Google Calendar Event Created!</h3>
+            </div>
+
+            <p className="text-xs text-slate-300 leading-relaxed">
+              Opened Google Calendar for <strong className="text-white">{syncedBooking.customerName} ({syncedBooking.companyName})</strong> with pre-filled event details, consultant name, and demo notes.
+            </p>
+
+            <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 text-xs space-y-1 font-mono">
+              <div className="text-emerald-400 font-bold">{syncedBooking.demoDate} @ {syncedBooking.demoTime}</div>
+              <div className="text-slate-400">Assigned Expert: {syncedBooking.assignedExpert}</div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <button
+                onClick={() => setSyncedBooking(null)}
+                className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-xs rounded-xl shadow-lg"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Email Summary Modal */}
+      {emailBooking && (
+        <EmailSummaryModal
+          isOpen={!!emailBooking}
+          onClose={() => setEmailBooking(null)}
+          leadData={{
+            name: emailBooking.customerName,
+            company: emailBooking.companyName,
+            phone: emailBooking.phone
+          }}
+          demoData={{
+            demoDate: emailBooking.demoDate,
+            demoTime: emailBooking.demoTime,
+            assignedExpert: emailBooking.assignedExpert,
+            notes: emailBooking.notes
+          }}
+          callSummary={`Demo call booked for ${emailBooking.customerName} (${emailBooking.companyName}) on ${emailBooking.demoDate} @ ${emailBooking.demoTime}.`}
+        />
+      )}
     </div>
   );
 };
+
